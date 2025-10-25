@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+sqlmodel
+python-jose
+passlib[bcrypt]
+scikit-learn
+joblib
+shap
+pydantic
+python-multipart
+kagglehub
