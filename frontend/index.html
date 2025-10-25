@@ -5,6 +5,266 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PhishGuard - Email Detector</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f2f5;
+        }
+        
+        h1 {
+            color: #007BFF;
+        }
+        
+        input,
+        textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        
+        button {
+            padding: 10px 15px;
+            background: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+        
+        canvas {
+            margin-top: 20px;
+        }
+        
+        #result,
+        #historySection {
+            margin-top: 20px;
+            padding: 10px;
+            background: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        th {
+            background: #007BFF;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>PhishGuard - Email Detector</h1>
+
+    <label for="subject">Email Subject:</label>
+    <input type="text" id="subject" placeholder="Enter email subject">
+
+    <label for="emailText">Email Body:</label>
+    <textarea id="emailText" rows="6" placeholder="Enter email body"></textarea>
+
+    <button onclick="classifyEmail()">Check Email</button>
+
+    <div id="result" style="display:none;">
+        <h2>Prediction:</h2>
+        <p id="label"></p>
+
+        <canvas id="confidenceChart" width="400" height="150"></canvas>
+
+        <h3>Top SHAP Features:</h3>
+        <canvas id="shapChart" width="400" height="200"></canvas>
+
+        <button onclick="submitFeedback()">Save Feedback</button>
+        <p id="feedbackMsg"></p>
+    </div>
+
+    <div id="historySection">
+        <h2>Feedback History</h2>
+        <button onclick="retrainModel()">Retrain Model</button>
+        <p id="retrainMsg"></p>
+        <table id="historyTable">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Email Text</th>
+                    <th>User Label</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        const BACKEND_URL = "";
+        const ADMIN_KEY = "admin123";
+
+        let currentPrediction = null;
+        let confidenceChart, shapChart;
+
+        // ----------------- Classify Email -----------------
+        async function classifyEmail() {
+            const subject = document.getElementById("subject").value;
+            const emailText = document.getElementById("emailText").value;
+
+            if (!emailText) {
+                alert("Enter email body");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("subject", subject);
+            formData.append("text", emailText);
+
+            const res = await fetch(`${BACKEND_URL}/api/classify`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+
+            currentPrediction = {
+                emailText: emailText,
+                user_label: data.label
+            };
+
+            document.getElementById("result").style.display = "block";
+            document.getElementById("label").innerHTML = `<b>Label:</b> ${data.label.toUpperCase()} (Confidence: ${data.confidence})`;
+
+            // -------- Confidence Chart --------
+            const confData = {
+                labels: ["Legit", "Phish"],
+                datasets: [{
+                    label: 'Confidence',
+                    data: data.label === "phish" ? [1 - data.confidence, data.confidence] : [data.confidence, 1 - data.confidence],
+                    backgroundColor: ['rgba(0,168,255,0.6)', 'rgba(255,50,50,0.6)']
+                }]
+            };
+            if (confidenceChart) confidenceChart.destroy();
+            const ctx1 = document.getElementById('confidenceChart').getContext('2d');
+            confidenceChart = new Chart(ctx1, {
+                type: 'bar',
+                data: confData,
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 1
+                        }
+                    }
+                }
+            });
+
+            // -------- SHAP Chart --------
+            const features = data.explanation.map(f => f.feature);
+            const impacts = data.explanation.map(f => f.impact);
+
+            const shapData = {
+                labels: features,
+                datasets: [{
+                    label: 'SHAP Impact',
+                    data: impacts,
+                    backgroundColor: 'rgba(0,123,255,0.6)'
+                }]
+            };
+            if (shapChart) shapChart.destroy();
+            const ctx2 = document.getElementById('shapChart').getContext('2d');
+            shapChart = new Chart(ctx2, {
+                type: 'bar',
+                data: shapData,
+                options: {
+                    responsive: true
+                }
+            });
+        }
+
+        // ----------------- Submit Feedback -----------------
+        async function submitFeedback() {
+            if (!currentPrediction) return;
+            const formData = new FormData();
+            formData.append("email_text", currentPrediction.emailText);
+            formData.append("user_label", currentPrediction.user_label);
+
+            const res = await fetch(`${BACKEND_URL}/api/feedback`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            document.getElementById('feedbackMsg').textContent = "Feedback saved!";
+            loadHistory();
+        }
+
+        // ----------------- Load Feedback History -----------------
+        async function loadHistory() {
+            const res = await fetch(`${BACKEND_URL}/api/history?limit=50`, {
+                headers: {
+                    "x-api-key": ADMIN_KEY
+                }
+            });
+            const data = await res.json();
+            const tbody = document.querySelector("#historyTable tbody");
+            tbody.innerHTML = "";
+            data.forEach(d => {
+                const row = document.createElement("tr");
+                row.innerHTML = `<td>${d.timestamp}</td><td>${d.email_text}</td><td>${d.user_label}</td>`;
+                tbody.appendChild(row);
+            });
+        }
+
+        // ----------------- Retrain Model -----------------
+        async function retrainModel() {
+            document.getElementById('retrainMsg').textContent = 'Retraining...';
+            const res = await fetch(`${BACKEND_URL}/api/retrain`, {
+                method: 'POST',
+                headers: {
+                    "x-api-key": ADMIN_KEY
+                }
+            });
+            const data = await res.json();
+            document.getElementById('retrainMsg').textContent = data.message || 'Model retrained';
+            loadHistory();
+        }
+
+        // ----------------- Initialize -----------------
+        loadHistory();
+    </script>
+
+</body>
+
+</html>
+
+
+
+
+
+
+
+
+
+
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishGuard - Email Detector</title>
     <style>
         * {
             box-sizing: border-box;
@@ -116,7 +376,7 @@
     </style>
 
     <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -276,244 +536,4 @@
     </script>
 </body>
 
-</html>
-
-
-
-
-
-
-<!-- <!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PhishGuard - Email Detector</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-        }
-        
-        body {
-            background: #f5f6fa;
-            color: #333;
-        }
-        
-        .container {
-            max-width: 700px;
-            margin: 50px auto;
-            background: #fff;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-        }
-        
-        h1 {
-            text-align: center;
-            margin-bottom: 20px;
-            color: #2f3640;
-        }
-        
-        form {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        
-        input,
-        textarea {
-            padding: 12px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            font-size: 16px;
-            width: 100%;
-            resize: vertical;
-        }
-        
-        button {
-            background: #00a8ff;
-            color: #fff;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        
-        button:hover {
-            background: #0097e6;
-        }
-        
-        .result {
-            margin-top: 20px;
-            padding: 20px;
-            background: #f1f2f6;
-            border-radius: 10px;
-        }
-        
-        .label {
-            font-weight: bold;
-            font-size: 18px;
-        }
-        
-        .confidence {
-            color: #718093;
-        }
-        
-        .explanation {
-            margin-top: 10px;
-        }
-        
-        .feature {
-            display: flex;
-            justify-content: space-between;
-            padding: 5px 0;
-        }
-        
-        .phish {
-            color: #e84118;
-        }
-        
-        .legit {
-            color: #4cd137;
-        }
-        
-        .feedback {
-            margin-top: 15px;
-        }
-        
-        .feedback label {
-            margin-right: 10px;
-        }
-        
-        @media(max-width:600px) {
-            .container {
-                margin: 20px;
-                padding: 20px;
-            }
-        }
-    </style>
-</head>
-
-<body>
-    <div class="container">
-        <h1>PhishGuard - Email Detector</h1>
-        <form id="emailForm">
-            <input type="text" id="subject" placeholder="Email Subject (optional)">
-            <textarea id="body" rows="6" placeholder="Email Body"></textarea>
-            <button type="submit">Check Email</button>
-        </form>
-
-        <div class="result" id="result" style="display:none;">
-            <div class="label" id="label"></div>
-            <div class="confidence" id="confidence"></div>
-            <div class="explanation" id="explanation"></div>
-
-            <div class="feedback" id="feedbackSection" style="display:none;">
-                <label>Was this correct?</label>
-                <button id="feedbackPhish">Phish</button>
-                <button id="feedbackLegit">Legit</button>
-                <div id="feedbackMsg"></div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const form = document.getElementById('emailForm');
-        const resultBox = document.getElementById('result');
-        const labelEl = document.getElementById('label');
-        const confEl = document.getElementById('confidence');
-        const explEl = document.getElementById('explanation');
-        const feedbackSection = document.getElementById('feedbackSection');
-        const feedbackMsg = document.getElementById('feedbackMsg');
-        let lastEmail = {
-            subject: '',
-            body: ''
-        };
-
-        const BACKEND_URL = 'http://127.0.0.1:8000';
-
-        form.addEventListener('submit', async(e) => {
-            e.preventDefault();
-            const subject = document.getElementById('subject').value;
-            const body = document.getElementById('body').value;
-            lastEmail = {
-                subject,
-                body
-            };
-
-            resultBox.style.display = 'none';
-            labelEl.textContent = '';
-            confEl.textContent = '';
-            explEl.innerHTML = '';
-            feedbackSection.style.display = 'none';
-            feedbackMsg.textContent = '';
-
-            try {
-                const formData = new FormData();
-                formData.append('text', body);
-                formData.append('subject', subject);
-
-                const response = await fetch(`${BACKEND_URL}/api/classify`, {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-
-                resultBox.style.display = 'block';
-                if (!response.ok) {
-                    labelEl.textContent = 'Error';
-                    confEl.textContent = data.detail || 'Server error';
-                    return;
-                }
-
-                labelEl.textContent = `Prediction: ${data.label.toUpperCase()}`;
-                labelEl.className = `label ${data.label==='phish'?'phish':'legit'}`;
-                confEl.textContent = `Confidence: ${(data.confidence*100).toFixed(2)}%`;
-
-                if (data.explanation && Array.isArray(data.explanation)) {
-                    explEl.innerHTML = '<h4>Top Features:</h4>';
-                    data.explanation.forEach(f => {
-                        const div = document.createElement('div');
-                        div.className = 'feature';
-                        div.innerHTML = `<span>${f.feature}</span><span>${f.impact.toFixed(4)}</span>`;
-                        explEl.appendChild(div);
-                    });
-                }
-
-                feedbackSection.style.display = 'block';
-            } catch (err) {
-                resultBox.style.display = 'block';
-                labelEl.textContent = 'Error';
-                confEl.textContent = err.message || 'Server error';
-            }
-        });
-
-        document.getElementById('feedbackPhish').addEventListener('click', () => sendFeedback('phish'));
-        document.getElementById('feedbackLegit').addEventListener('click', () => sendFeedback('legit'));
-
-        async function sendFeedback(userLabel) {
-            try {
-                const formData = new FormData();
-                formData.append('email_text', lastEmail.body);
-                formData.append('user_label', userLabel);
-
-                const response = await fetch(`${BACKEND_URL}/api/feedback`, {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-                feedbackMsg.textContent = `Feedback submitted: ${data.user_label}`;
-            } catch (err) {
-                feedbackMsg.textContent = 'Error submitting feedback';
-            }
-        }
-    </script>
-</body>
-
-</html> -->
+</html> -->-->

@@ -1,0 +1,13 @@
+timestamp,email_text,user_label
+2025-10-25T08:51:42.062848,"This email is to inform you of a change in our daily working hours. Starting next Monday, our new working hours will be from 9:30 AM to 6:00 PM, Monday through Friday. 
+This change is to better align with our operational needs. We appreciate your understanding and cooperation.
+Please reach out to management if you have any concerns.
+",legit
+2025-10-25T08:55:29.411001,"I am writing to express my strong interest in the [Job Title] position at [Company Name], which I saw advertised on [Platform where you saw the job posting]. My [number] years of experience in [relevant field] align perfectly with the requirements for this role.
+In my previous position at [Previous Company], I was responsible for [briefly describe a relevant achievement]. I am confident that my skills would make a valuable contribution to your team.
+I have attached my resume for your review and look forward to discussing this opportunity further.
+Sincerely,
+[Your Name]",phish
+2025-10-25T08:56:04.976330,"Hi [Recipient's Name],
+I would like to request a meeting to discuss our budget plan for the fourth quarter. It would be a great opportunity to align on priorities and address any questions the team may have.
+Would you be available on [Date] at [Time] for approximately [Duration]? If not, please let me know what time works best for you.",legit

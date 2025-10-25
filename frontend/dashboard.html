@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishGuard Admin Dashboard</title>
+    <style>
+        body {
+            font-family: Arial;
+            margin: 0;
+            background: #f5f5f5;
+        }
+        
+        header {
+            background: #3f51b5;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 2rem auto;
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        button {
+            padding: 0.5rem 1rem;
+            margin: 0.5rem 0;
+            border: none;
+            background: #3f51b5;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #303f9f;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        
+        th,
+        td {
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            text-align: left;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Admin Dashboard</h1>
+    </header>
+    <div class="container">
+        <button onclick="loadHistory()">Load Feedback History</button>
+        <button onclick="retrain()">Retrain Model</button>
+        <table id="historyTable">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Email Text</th>
+                    <th>Label</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        const ADMIN_KEY = "phishguard_admin_123";
+
+        function loadHistory() {
+            fetch("/api/history")
+                .then(res => res.json())
+                .then(data => {
+                    const tbody = document.querySelector("#historyTable tbody");
+                    tbody.innerHTML = "";
+                    data.forEach(row => {
+                        const tr = document.createElement("tr");
+                        tr.innerHTML = `<td>${row.timestamp}</td><td>${row.email_text}</td><td>${row.user_label}</td>`;
+                        tbody.appendChild(tr);
+                    });
+                })
+                .catch(err => alert("Failed to load history: " + err));
+        }
+
+        function retrain() {
+            fetch("/api/retrain", {
+                    method: "POST",
+                    headers: {
+                        "api_key": ADMIN_KEY
+                    }
+                })
+                .then(res => res.json())
+                .then(data => alert(data.message))
+                .catch(err => alert("Retrain failed: " + err));
+        }
+    </script>
+</body>
+
+</html>
+
+
+
+
+
+
+
+
+
+
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishGuard Admin Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial;
+            margin: 20px;
+            background: #f0f2f5;
+        }
+        
+        h1 {
+            color: #007BFF;
+        }
+        
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+        }
+        
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        th {
+            background: #007BFF;
+            color: white;
+        }
+        
+        button {
+            padding: 10px 15px;
+            background: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>PhishGuard Admin Dashboard</h1>
+    <button onclick="retrainModel()">Retrain Model</button>
+    <p id="retrainMsg"></p>
+    <canvas id="shapChart" width="400" height="200"></canvas>
+
+    <h2>Feedback History</h2>
+    <table id="historyTable">
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Email Text</th>
+                <th>User Label</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        const BACKEND_URL = "";
+        const API_KEY = "admin123";
+
+        async function loadHistory() {
+            const res = await fetch(`${BACKEND_URL}/api/history?limit=50`, {
+                headers: {
+                    "x-api-key": API_KEY
+                }
+            });
+            const data = await res.json();
+            const tbody = document.querySelector("#historyTable tbody");
+            tbody.innerHTML = "";
+            data.forEach(d => {
+                const row = document.createElement("tr");
+                row.innerHTML = `<td>${d.timestamp}</td><td>${d.email_text}</td><td>${d.user_label}</td>`;
+                tbody.appendChild(row);
+            });
+            renderSHAPChart(data);
+        }
+
+        function renderSHAPChart(data) {
+            const counts = {};
+            data.forEach(d => {
+                counts[d.user_label] = (counts[d.user_label] || 0) + 1;
+            });
+            const ctx = document.getElementById('shapChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(counts),
+                    datasets: [{
+                        label: 'Count',
+                        data: Object.values(counts),
+                        backgroundColor: 'rgba(0,123,255,0.6)'
+                    }]
+                },
+                options: {
+                    responsive: true
+                }
+            });
+        }
+
+        async function retrainModel() {
+            document.getElementById('retrainMsg').textContent = 'Retraining...';
+            const res = await fetch(`${BACKEND_URL}/api/retrain`, {
+                method: 'POST',
+                headers: {
+                    'x-api-key': API_KEY
+                }
+            });
+            const data = await res.json();
+            document.getElementById('retrainMsg').textContent = data.message || 'Model retrained';
+            loadHistory();
+        }
+
+        loadHistory();
+    </script>
+</body>
+
+</html> -->
+
+
+
+
+
+
+
+
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishGuard Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f6fa;
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #2f3640;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        th {
+            background: #00a8ff;
+            color: #fff;
+        }
+        
+        button {
+            padding: 8px 12px;
+            margin: 5px;
+            border: none;
+            border-radius: 6px;
+            background: #00a8ff;
+            color: #fff;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #0097e6;
+        }
+        
+        canvas {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>PhishGuard Dashboard</h1>
+    <button onclick="retrainModel()">Retrain Model</button>
+    <p id="retrainMsg"></p>
+    <table id="historyTable">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Subject</th>
+                <th>Body</th>
+                <th>Prediction</th>
+                <th>Confidence</th>
+                <th>Top Features</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <canvas id="topFeaturesChart"></canvas>
+
+    <script>
+        const BACKEND_URL = 'http://127.0.0.1:8000';
+        const API_KEY = 'phishguard123';
+
+        async function loadHistory() {
+            const res = await fetch(`${BACKEND_URL}/api/history?limit=50`, {
+                headers: {
+                    'x-api-key': API_KEY
+                }
+            });
+            const data = await res.json();
+            const tbody = document.querySelector('#historyTable tbody');
+            tbody.innerHTML = '';
+            let featuresCounter = {};
+            data.emails.forEach(e => {
+                const topf = e.shap_values ? JSON.parse(e.shap_values).map(f => f.feature).join(', ') : '';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${e.timestamp}</td><td>${e.subject||''}</td><td>${e.body||''}</td><td>${e.prediction||e.label||''}</td><td>${e.confidence||''}</td><td>${topf}</td>`;
+                tbody.appendChild(tr);
+                // Count features
+                if (e.shap_values) {
+                    JSON.parse(e.shap_values).forEach(f => {
+                        featuresCounter[f.feature] = (featuresCounter[f.feature] || 0) + Math.abs(f.impact)
+                    });
+                }
+            });
+            renderTopFeaturesChart(featuresCounter);
+        }
+
+        function renderTopFeaturesChart(counter) {
+            const ctx = document.getElementById('topFeaturesChart').getContext('2d');
+            const labels = Object.keys(counter).slice(0, 10);
+            const data = Object.values(counter).slice(0, 10);
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Feature Impact',
+                        data,
+                        backgroundColor: 'rgba(0,168,255,0.6)'
+                    }]
+                },
+                options: {
+                    responsive: true
+                }
+            });
+        }
+
+        async function retrainModel() {
+            document.getElementById('retrainMsg').textContent = 'Retraining...';
+            const res = await fetch(`${BACKEND_URL}/api/retrain`, {
+                method: 'POST',
+                headers: {
+                    'x-api-key': API_KEY
+                }
+            });
+            const data = await res.json();
+            document.getElementById('retrainMsg').textContent = data.message || 'Model retrained';
+            loadHistory();
+        }
+
+        // Load dashboard on start
+        loadHistory();
+    </script>
+</body>
+
+</html> -->
